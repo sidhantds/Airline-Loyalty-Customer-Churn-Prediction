@@ -25,3 +25,6 @@ An illustrative high-risk campaign assumes ₹500 annual customer value, ₹50 r
 4. The notebook saves hold-out risk scores to [`outputs/airline_churn_predictions.csv`](./outputs/airline_churn_predictions.csv).
 
 The source dataset is from Maven Analytics' Airline Loyalty Program dataset.
+
+<img width="1199" height="1656" alt="image" src="https://github.com/user-attachments/assets/59a72b36-5a3f-4451-9baa-3d1608779930" />
+
