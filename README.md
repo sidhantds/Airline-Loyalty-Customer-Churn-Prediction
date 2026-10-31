@@ -1,4 +1,11 @@
-# Airline Loyalty Customer Churn
+# ✈️ Airline Loyalty Customer Churn
+
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)
+![pandas](https://img.shields.io/badge/pandas-150458?style=flat-square&logo=pandas&logoColor=white)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?style=flat-square&logo=scikitlearn&logoColor=white)
+![Jupyter](https://img.shields.io/badge/Jupyter-F37626?style=flat-square&logo=jupyter&logoColor=white)
+
+> **Result:** Random Forest ranks members so the top 20% hold about half of all next year churners (2.5× random). Caught and removed a leakage trap that had inflated ROC-AUC from 0.71 to 0.87.
 
 **Business question:** Which airline loyalty members are most likely to cancel in the near future, and which high-value customers should the retention team contact first?
 
@@ -21,6 +28,25 @@ This is a retrospective portfolio project using historical cancellation labels. 
 - **Tenure** is the strongest signal: first-year members churn at about 10%, against about 3% for longer-tenured members. The lowest quarter of 2017 flyers churn at about 7%, against about 3% for everyone else.
 - At the chosen threshold (0.36), the model flags 352 hold-out members and catches **44%** of churners at **12%** precision. Accuracy is not reported as a headline: predicting "nobody churns" scores 96%.
 
+### Model comparison (5-fold CV, training set)
+
+| Model | ROC-AUC | PR-AUC | Recall | Precision |
+|:--|:--:|:--:|:--:|:--:|
+| **Random Forest** ⭐ | **0.709** | **0.108** | 0.306 | 0.142 |
+| Logistic Regression | 0.695 | 0.101 | 0.591 | 0.071 |
+| SVM (RBF) | 0.670 | 0.084 | 0.000 | 0.000 |
+| KNN | 0.641 | 0.073 | 0.000 | 0.000 |
+
+Random guessing scores a PR-AUC of 0.04 (the churn rate).
+
+### Lift on the hold-out set
+
+| Decile | Churn rate | Lift | Cumulative % of churners |
+|:--:|:--:|:--:|:--:|
+| 1 | 12% | 3.08× | 31% |
+| 2 | 8% | 2.05× | 52% |
+| 3 | 4% | 1.13× | 63% |
+
 ## Business simulation
 
 The simulation ranks members by **expected value at risk = churn probability × CLV** and compares campaigns against random outreach. The assumptions are illustrative: a CAD 50 offer, 20% success, and 10% of CLV retained. Model-targeted campaigns reach 2–4× more churners (and 3–4× more CLV) than random outreach. However, a CAD 50 offer only breaks even at about a 39% success rate for the top value-at-risk group. That points to a cheaper first touch, or a pilot to measure the real success rate.
@@ -33,6 +59,21 @@ The simulation ranks members by **expected value at risk = churn probability × 
 4. The notebook saves hold-out risk scores to [`outputs/airline_churn_predictions.csv`](./outputs/airline_churn_predictions.csv).
 
 The source dataset is from Maven Analytics' Airline Loyalty Program dataset.
+
+## Project structure
+
+```
+├── DATA/                      # Maven Analytics source CSVs
+├── notebook/
+│   └── Airline_Loyalty_Program.ipynb
+├── outputs/
+│   └── airline_churn_predictions.csv
+└── requirements.txt
+```
+
+**Stack:** Python · pandas · NumPy · scikit-learn · Matplotlib · Seaborn
+
+Built by [Sidhant Pujara](https://sidhantpujara.vercel.app/)
 
 <img width="1199" height="1656" alt="image" src="https://github.com/user-attachments/assets/59a72b36-5a3f-4451-9baa-3d1608779930" />
 
