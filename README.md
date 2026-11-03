@@ -13,13 +13,70 @@ The objective is not only to predict churn, but to help prioritize limited reten
 
 This is a retrospective portfolio project using historical cancellation labels. Model metrics and ROI estimates are illustrative, not live airline results.
 
-## Approach
+## System design
 
-- **Snapshot design to avoid target leakage.** Flight activity covers 2017–2018, but cancellations go back to 2013, and members record zero flights after cancelling. Totalling activity for every cancelled member would teach the model that people who already left stopped flying. Instead, the notebook takes a snapshot on **31 Dec 2017**. It uses only 2017 activity for the **12,305 members active at that date** and predicts who cancels during **2018** (3.9% churn rate).
-- **Features:** 2017 flights, distance, points, redemptions, months flown, recency (months since last flight), half-year trend, Q4 activity, membership tenure, and profile fields.
-- **Models:** a do-nothing baseline, Logistic Regression, KNN, Random Forest, and SVM. They are compared with 5-fold stratified cross-validation on the training set only, ranked by **PR-AUC** (the right metric for a rare outcome).
-- **Threshold:** chosen from out-of-fold training predictions by maximizing F2 (recall-weighted), never from the test set.
-- **Final check:** one evaluation on a 20% stratified hold-out set, with a confusion matrix, ROC and precision-recall curves, and a decile lift table.
+### Point in time snapshot: the core of the design
+
+```mermaid
+flowchart LR
+    subgraph SRC["Source tables"]
+        LH[("Customer Loyalty History<br/>one row per member")]
+        FA[("Customer Flight Activity<br/>one row per member per month")]
+    end
+
+    FA --> AGG["Merge repeat rows<br/>into one row per member month"]
+    LH --> ACT["Members active on 31 Dec 2017<br/>enrolled before, not yet cancelled"]
+
+    subgraph TIME["Time split at the snapshot date"]
+        direction TB
+        FW["Feature window: 2017<br/>flights, points, recency, trend"]
+        LW["Label window: 2018<br/>did the member cancel?"]
+    end
+
+    AGG --> FW
+    ACT --> FW
+    ACT --> LW
+
+    FW --> PIPE
+    LW --> PIPE
+
+    subgraph PIPE["One sklearn Pipeline"]
+        CT["ColumnTransformer<br/>impute + scale numbers,<br/>impute + one hot categories"] --> RF["Random Forest"]
+    end
+
+    PIPE --> SCORE["Churn probability"]
+    SCORE --> DEC["Decision layer<br/>value at risk = probability × CLV<br/>tier by percentile rank<br/>action per tier"]
+    DEC --> OUT[("airline_churn_predictions.csv")]
+```
+
+Everything the model sees comes from **before** the snapshot date, and everything it predicts comes from **after** it. This mirrors how the model would be used for real: on 31 December you only know the past, and you want to know who leaves next year. The snapshot keeps the **12,305 members active on that date**, of whom 3.9% cancel during 2018.
+
+**Features from the 2017 window:** flights, distance, points earned and redeemed, months flown, months since the last flight, first half against second half trend, Q4 activity, membership tenure, and profile fields. Identifiers, the single value country column and the cancellation date columns, which define the label, are removed before modelling.
+
+### Why this matters
+
+Cancellations in the data go back to 2013, but flight records only cover 2017 and 2018. A naive approach adds up all activity per member and labels anyone who ever cancelled. Members who left in 2015 then show zero flights, and the model learns "no flights means churned", which is true but useless, because those people are already gone. That shortcut produced a ROC AUC of 0.87. The snapshot design removes it and gives the honest 0.71.
+
+### Design decisions and trade offs
+
+| Decision | Why | Cost |
+|---|---|---|
+| Single snapshot on 31 Dec 2017 | The only date where a full year of features and a full year of labels both exist | One snapshot means the result cannot be checked across other years |
+| Preprocessing inside the Pipeline | Imputation and scaling are fitted again inside every cross validation fold, so no information leaks from the held out folds | Slower cross validation |
+| Models compared on PR AUC with 5 fold CV on the training set | With 3.9% churn, accuracy and ROC AUC look good even for weak models; PR AUC does not | PR AUC is less familiar to business readers |
+| Threshold chosen from out of fold predictions, maximising F2 | Recall counts double, because missing a churner costs more than one extra offer; the test set stays untouched | 12% precision, so most contacted members were never going to leave |
+| Tiers by **percentile rank**, not fixed probability cut offs | The retention team has fixed capacity; "top 10% are high risk" always gives a list of a size they can work through | A member's tier depends on everyone else's score |
+| Value at risk = probability × CLV | Ranks a likely churner worth little below a less likely one worth a lot | CLV is taken as given and not checked |
+
+### How it would run in production
+
+A monthly batch job: at each month end, rebuild the 12 month feature window as of that date, score every active member with the saved pipeline, and push the ranked list to the CRM. The model would be retrained when a new year of labels arrives, and checked on a second snapshot before replacing the old one.
+
+### Known gaps
+
+* **Notebook only.** The fitted pipeline is not saved as a file, so scoring new members means running the notebook again.
+* **No backtest over time.** With only one usable snapshot, there is no evidence yet that a model trained on 2017 behaviour works on 2019 behaviour.
+* **ROI numbers rest on assumptions.** The 10% retained value, 20% save rate and CAD 50 offer cost are illustrative inputs, not measured values.
 
 ## Findings
 
